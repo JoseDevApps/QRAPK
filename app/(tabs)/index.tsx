@@ -1,74 +1,193 @@
-import { Image, StyleSheet, Platform } from 'react-native';
-
-import { HelloWave } from '@/components/HelloWave';
-import ParallaxScrollView from '@/components/ParallaxScrollView';
+import React from 'react';
+import { Image, StyleSheet, Platform, Button, Alert, View, Dimensions,TouchableOpacity, Text} from 'react-native';
+import * as SplashScreen from 'expo-splash-screen';
+import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system';
+import XLSX from 'xlsx';
+import { useCallback } from 'react';
+import { useRouter } from 'expo-router';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
+import { useFileData } from '@/contexts/FileDataContext'; // Import the custom hook
+import { useFonts } from 'expo-font';
+const { height,width } = Dimensions.get('window'); // Obtiene el ancho de la pantalla
+SplashScreen.preventAutoHideAsync(); // Prevent splash screen from hiding before fonts load
 
 export default function HomeScreen() {
+  const [fontsLoaded] = useFonts({
+    'ProtestStrike-Regular': require('@/assets/fonts/ProtestStrike-Regular.ttf'),
+  });
+  const onLayoutRootView = useCallback(async () => {
+    if (fontsLoaded) {
+      await SplashScreen.hideAsync();
+    }
+  }, [fontsLoaded]);
+  
+  if (!fontsLoaded) {
+    return null; // Prevent rendering before fonts are loaded
+  }
+
+
+  const { setFileData } = useFileData(); // Access the function to set fileData
+  const router = useRouter();
+
+  // Function to pick and process the Excel file
+  const pickExcelFile = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // Excel MIME type
+      });
+
+      if (result.type === 'cancel') return; // Handle cancellation
+
+      const uri = result.assets[0].uri; // Get the correct file URI
+
+      // Read the file content as Base64
+      const base64 = await FileSystem.readAsStringAsync(uri, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+
+      // Convert Base64 to a Uint8Array for XLSX parsing
+      const bytes = base64ToUint8Array(base64);
+      const workbook = XLSX.read(bytes, { type: 'array' });
+      const sheetName = workbook.SheetNames[0]; // Get the first sheet
+      const worksheet = workbook.Sheets[sheetName];
+      const jsonData = XLSX.utils.sheet_to_json(worksheet); // Convert sheet to JSON
+
+      setFileData(jsonData); // Set the data to state
+      Alert.alert('File loaded successfully', 'Excel file data has been processed.');
+      // Navigate to the Explore screen with the fileData
+      router.push({
+        pathname: '/explore',
+
+      });
+
+    } catch (error) {
+      console.error('Error loading the document:', error);
+      Alert.alert('Error', 'An error occurred while loading the file.');
+    }
+  };
+
+  // Function to convert Base64 to Uint8Array
+  const base64ToUint8Array = (base64: string): Uint8Array => {
+    const binaryString = atob(base64);
+    const len = binaryString.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    return bytes;
+  };
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
+    <View style={styles.container}> 
+     <View style={styles.title}>
       <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
+        <ThemedText style={styles.titleContainer1} type="title">QR</ThemedText>
+        <ThemedText style={styles.titleContainer2} type="title"> Pass</ThemedText>
       </ThemedView>
+     </View>
+
+      <View style={styles.body}>
+      {/* Load Excel File Button */}
+      <ThemedView style={styles.stepContainer1}>
+        <TouchableOpacity style={styles.customButton} onPress={pickExcelFile}>
+          <Text style={styles.buttonText}>Load Excel File</Text>
+        </TouchableOpacity>
+    </ThemedView>
+      {/* Display loaded data */}
       <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12'
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
+        <ThemedText type="subtitle" style={styles.titleContainer1} >Loaded Excel Data:</ThemedText>
       </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-        <ThemedText>
-          Tap the Explore tab to learn more about what's included in this starter app.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          When you're ready, run{' '}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+      </View>
+       
+    </View>
+
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+  container: {
+    flex: 1,
+    backgroundColor: 'black',
+    paddingTop: height * 0.1,
+    
   },
+  body: {
+    flex: 0.6,
+    paddingLeft: width * 0.1,
+    paddingRight: width * 0.1,
+    justifyContent: 'center',
+  },
+  title: {
+    flex: 0.1,
+    flexDirection: 'column',
+    paddingTop: height * 0.05,
+    alignItems: 'center',
+  },
+  titleContainer: {
+    backgroundColor: 'black',
+    flexDirection: 'row',
+
+  },
+  titleContainerHelp: {
+    backgroundColor: 'black',
+    flexDirection: 'row',
+    justifyContent: 'center',
+
+  },
+  titleContainer1: {
+    color: "#FFFFFF",
+    fontFamily: 'ProtestStrike-Regular',
+  },
+  titleContainer2: {
+    color: "#009FE3",
+    fontFamily: 'ProtestStrike-Regular',
+  },
+  titleText: {
+    fontFamily: 'ProtestStrike-Regular',
+    color: '#009FE3',
+    fontSize: 32,
+    fontWeight: 'bold',
+    
+  },
+  helptext: {
+    fontFamily: 'ProtestStrike-Regular',
+    color: '#009FE3',
+    fontSize: 20,
+  },
+  
   stepContainer: {
     gap: 8,
-    marginBottom: 8,
+    marginBottom: height * 0.1,
+    alignItems: 'center',
+    
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
+  stepContainer1: {
+    gap: 8,
+    marginBottom: height * 0.1,
+    alignItems: 'center',
+  },
+  subtitle: {
+    fontFamily: 'ProtestStrike-Regular',
+    fontSize: 18,
+    color: 'white',
+    fontWeight: 'bold',
+  },
+  loadedData: {
+    fontFamily: 'ProtestStrike-Regular',
+    fontSize: 14,
+    color: '#cccccc',
+  },
+  customButton: {
+    padding: 10,
+    borderRadius: 5,
+    alignItems: 'center',
+  },
+  buttonText: {
+    fontFamily: 'ProtestStrike-Regular',
+    color: '#009FE3',
+    fontSize: 24,
+    fontWeight: 'bold',
   },
 });

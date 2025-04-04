@@ -1,109 +1,214 @@
-import { StyleSheet, Image, Platform } from 'react-native';
+import { CameraView, CameraType, useCameraPermissions, FlashMode  } from 'expo-camera';
+import { useState, useEffect, useRef } from 'react';
+import { Button, StyleSheet, Text, View, Modal, TouchableOpacity, Platform,StatusBar, AppState, Alert } from 'react-native';
+import { Overlay } from "./Overlay";
+import { Audio } from 'expo-av';
+import { useFileData } from '@/contexts/FileDataContext'; // Access the context
 
-import { Collapsible } from '@/components/Collapsible';
-import { ExternalLink } from '@/components/ExternalLink';
-import ParallaxScrollView from '@/components/ParallaxScrollView';
-import { ThemedText } from '@/components/ThemedText';
-import { ThemedView } from '@/components/ThemedView';
-import { IconSymbol } from '@/components/ui/IconSymbol';
+export default function App() {
+  const { statedup,setStatedup,fileData, setFileData } = useFileData(); // Get the fileData from the context
+  const [sound, setSound] = useState<Audio.Sound | null>(null);
+  const [facing, setFacing] = useState<CameraType>('back');
+  const [permission, requestPermission] = useCameraPermissions();
+  const [scannedData, setScannedData] = useState<string | null>(null);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [matchFound, setMatchFound] = useState(false); // New state to track if the match is found
+  const [stateqr, setStateQR] = useState<string | null>(null);
+  const [scannedState, setScannedState] = useState<string | null>(null);
+  const [torchOn, setTorchOn] = useState(false);
+  
+  // Load sound for scanning
+  const playScanSound = async () => {
+    const { sound } = await Audio.Sound.createAsync(
+      require('@/assets/sounds/scan-sound.mp3') // Add your sound file here
+    );
+    setSound(sound);
+    await sound.playAsync(); // Play the sound when QR code is scanned
+  };
 
-export default function TabTwoScreen() {
+  
+  // Compare scanned QR code with the loaded Excel data
+  const compareWithExcelData = (scannedCode: string) => {
+    // Find the entry that matches the scanned QR code
+    setScannedState(" ");
+    const match = fileData.find((row) => row["Código QR"] === scannedCode);
+  
+    if (match) {
+      if (match.Estado === "scanned") {
+        // If QR code is already scanned, show an alert
+        setStateQR("DUPLICADO");
+        setScannedState("scanned");
+        setMatchFound((prevCount) => prevCount + 1);
+        return; // Exit the function to prevent re-updating
+      }
+  
+      // If a match is found and it's not scanned, update matchFound state
+      setMatchFound(true);
+      setStateQR("APROBADO");
+      // Update "Estado" field to "scanned"
+      setFileData((prevData) =>
+        prevData.map((row) =>
+          row["Código QR"] === scannedCode
+            ? { ...row, Estado: "scanned" }
+            : row
+        )
+      );
+    } else {
+      // If no match is found, update matchFound state and show a failure message
+      setMatchFound(false);
+      setStateQR("DENEGADO");
+    }
+  };
+
+  useEffect(() => {
+    console.log('Loaded file data:', fileData); // Ensure fileData is available
+  }, [fileData]);
+
+  const qrLock = useRef(false);
+  const appState = useRef(AppState.currentState);
+
+  useEffect(() => {
+    // Listen to app state changes
+    const subscription = AppState.addEventListener("change", (nextAppState) => {
+      if (appState.current.match(/inactive|background/) && nextAppState === "active") {
+        qrLock.current = false; // Reset QR lock when app comes to the foreground
+      }
+      appState.current = nextAppState; // Update app state
+    });
+
+    // Cleanup the subscription when the component is unmounted
+    return () => {
+      subscription.remove();
+    };
+  }, []);
+
+  if (!permission) {
+    return <View />;
+  }
+
+  if (!permission.granted) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.message}>We need your permission to show the camera</Text>
+        <Button onPress={requestPermission} title="Grant Permission" />
+      </View>
+    );
+  }
+
+  function handleBarcodeScanned({ data }: { data: string }) {
+    if (data && !qrLock.current) {
+      qrLock.current = true;
+      setScannedData(data);
+      playScanSound(); // Play the scan sound
+      setModalVisible(true);
+      compareWithExcelData(data); // Compare the scanned data with the file data
+
+    }
+  }
+
+  function handleConfirm() {
+    setModalVisible(false);
+    setTimeout(async () => {
+      qrLock.current = false;
+    }, 2000); // 2 seconds delay before unlocking again
+  }
+
+  function toggleFlashlight() {
+    setTorchOn((prev) => !prev);
+  }
+
+  const getModalBackgroundColor = (stateqr: string | null) => {
+    switch (stateqr) {
+      case "APROBADO":
+        return "rgba(170, 204, 0, 0.8)"; // Green
+      case "DENEGADO":
+        return "rgba(239, 35, 60, 0.8)";// Red
+      case "DUPLICADO":
+        return "rgba(33, 37, 41, 0.8)";// Orange
+      default:
+        return "rgba(62, 72, 64, 0.5)"; // Default gray
+    }
+  };
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#D0D0D0', dark: '#353636' }}
-      headerImage={
-        <IconSymbol
-          size={310}
-          color="#808080"
-          name="chevron.left.forwardslash.chevron.right"
-          style={styles.headerImage}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Explore</ThemedText>
-      </ThemedView>
-      <ThemedText>This app includes example code to help you get started.</ThemedText>
-      <Collapsible title="File-based routing">
-        <ThemedText>
-          This app has two screens:{' '}
-          <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> and{' '}
-          <ThemedText type="defaultSemiBold">app/(tabs)/explore.tsx</ThemedText>
-        </ThemedText>
-        <ThemedText>
-          The layout file in <ThemedText type="defaultSemiBold">app/(tabs)/_layout.tsx</ThemedText>{' '}
-          sets up the tab navigator.
-        </ThemedText>
-        <ExternalLink href="https://docs.expo.dev/router/introduction">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Android, iOS, and web support">
-        <ThemedText>
-          You can open this project on Android, iOS, and the web. To open the web version, press{' '}
-          <ThemedText type="defaultSemiBold">w</ThemedText> in the terminal running this project.
-        </ThemedText>
-      </Collapsible>
-      <Collapsible title="Images">
-        <ThemedText>
-          For static images, you can use the <ThemedText type="defaultSemiBold">@2x</ThemedText> and{' '}
-          <ThemedText type="defaultSemiBold">@3x</ThemedText> suffixes to provide files for
-          different screen densities
-        </ThemedText>
-        <Image source={require('@/assets/images/react-logo.png')} style={{ alignSelf: 'center' }} />
-        <ExternalLink href="https://reactnative.dev/docs/images">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Custom fonts">
-        <ThemedText>
-          Open <ThemedText type="defaultSemiBold">app/_layout.tsx</ThemedText> to see how to load{' '}
-          <ThemedText style={{ fontFamily: 'SpaceMono' }}>
-            custom fonts such as this one.
-          </ThemedText>
-        </ThemedText>
-        <ExternalLink href="https://docs.expo.dev/versions/latest/sdk/font">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Light and dark mode components">
-        <ThemedText>
-          This template has light and dark mode support. The{' '}
-          <ThemedText type="defaultSemiBold">useColorScheme()</ThemedText> hook lets you inspect
-          what the user's current color scheme is, and so you can adjust UI colors accordingly.
-        </ThemedText>
-        <ExternalLink href="https://docs.expo.dev/develop/user-interface/color-themes/">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Animations">
-        <ThemedText>
-          This template includes an example of an animated component. The{' '}
-          <ThemedText type="defaultSemiBold">components/HelloWave.tsx</ThemedText> component uses
-          the powerful <ThemedText type="defaultSemiBold">react-native-reanimated</ThemedText>{' '}
-          library to create a waving hand animation.
-        </ThemedText>
-        {Platform.select({
-          ios: (
-            <ThemedText>
-              The <ThemedText type="defaultSemiBold">components/ParallaxScrollView.tsx</ThemedText>{' '}
-              component provides a parallax effect for the header image.
-            </ThemedText>
-          ),
-        })}
-      </Collapsible>
-    </ParallaxScrollView>
+    <View style={styles.container}>
+      
+      {Platform.OS === "android" ? <StatusBar hidden /> : null}
+      <CameraView style={styles.camera} facing="back" onBarcodeScanned={handleBarcodeScanned}  />
+      <Overlay />
+      <TouchableOpacity style={styles.flashlightButton} onPress={toggleFlashlight}>
+        <Text style={styles.flashlightText}>{torchOn ? 'Flash OFF' : 'Flash ON'}</Text>
+      </TouchableOpacity>
+    <Modal animationType="slide" transparent={true} visible={modalVisible}>
+      <View style={styles.modalContainer}>
+        <View style={[styles.modalContent, { backgroundColor: getModalBackgroundColor(stateqr) }]}>
+          <Text style={styles.modalText}>
+            {stateqr}
+          </Text>
+          <Text style={styles.modalData}>{scannedData}</Text>
+          <TouchableOpacity style={styles.modalButton} onPress={handleConfirm}>
+            <Text style={styles.modalButtonText}>OK</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  headerImage: {
-    color: '#808080',
-    bottom: -90,
-    left: -35,
+  container: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  message: {
+    textAlign: 'center',
+    paddingBottom: 10,
+  },
+  camera: {
+    flex: 1,
+  },
+  modalContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(62, 72, 64, 0.5)',
+  },
+  modalContent: {
+    width: 300,
+    padding: 20,
+    backgroundColor: 'rgba(44, 197, 72, 0.5)',
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  modalText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 10,
+    color: "white"
+  },
+  modalData: {
+    fontSize: 16,
+    marginBottom: 20,
+    textAlign: 'center',
+    color: "white"
+  },
+  modalButton: {
+    backgroundColor: '#2196F3',
+    padding: 10,
+    borderRadius: 5,
+  },
+  modalButtonText: {
+    color: 'white',
+    fontSize: 16,
+  },
+  flashlightButton: {
     position: 'absolute',
+    bottom: 100,
+    alignSelf: 'center',
+    backgroundColor: 'black',
+    padding: 15,
+    borderRadius: 10,
   },
-  titleContainer: {
-    flexDirection: 'row',
-    gap: 8,
-  },
+  flashlightText: { color: 'white', fontSize: 16, fontWeight: 'bold' },
 });
