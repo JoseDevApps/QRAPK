@@ -17,14 +17,10 @@ const inner = rrect(
   50
 );
 
-export const Overlay = () => {
+export default function Overlay() {
   return (
-    <Canvas
-      style={
-        Platform.OS === "android" ? { flex: 1 } : StyleSheet.absoluteFillObject
-      }
-    >
-      <DiffRect inner={inner} outer={outer} color="black" opacity={0.5} />
-    </Canvas>
+    <Canvas style={StyleSheet.absoluteFill}>
+    <DiffRect inner={inner} outer={outer} color="black" opacity={0.5} />
+  </Canvas>
   );
 };

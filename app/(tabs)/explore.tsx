@@ -1,14 +1,15 @@
 import { CameraView, CameraType, useCameraPermissions, FlashMode  } from 'expo-camera';
 import { useState, useEffect, useRef } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
+import { useCallback } from 'react';
 import { Button, StyleSheet, Text, View, Modal, TouchableOpacity, Platform,StatusBar, AppState, Alert } from 'react-native';
-import { Overlay } from "./Overlay";
+import Overlay from "@/components/Overlay";
 import { Audio } from 'expo-av';
 import { useFileData } from '@/contexts/FileDataContext'; // Access the context
 
 export default function App() {
   const { statedup,setStatedup,fileData, setFileData } = useFileData(); // Get the fileData from the context
   const [sound, setSound] = useState<Audio.Sound | null>(null);
-  const [facing, setFacing] = useState<CameraType>('back');
   const [permission, requestPermission] = useCameraPermissions();
   const [scannedData, setScannedData] = useState<string | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
@@ -16,7 +17,10 @@ export default function App() {
   const [stateqr, setStateQR] = useState<string | null>(null);
   const [scannedState, setScannedState] = useState<string | null>(null);
   const [torchOn, setTorchOn] = useState(false);
-  
+  const [qrID, setQrID] = useState<string | null>(null); 
+  const lastDuplicate = statedup.find(item => item.duplicateQRID === qrID);
+  const [isActive, setIsActive] = useState(false);
+
   // Load sound for scanning
   const playScanSound = async () => {
     const { sound } = await Audio.Sound.createAsync(
@@ -34,17 +38,25 @@ export default function App() {
     const match = fileData.find((row) => row["Código QR"] === scannedCode);
   
     if (match) {
+      setQrID(match["QR ID"])
+      console.log(match["QR ID"])
       if (match.Estado === "scanned") {
         // If QR code is already scanned, show an alert
-        setStateQR("DUPLICADO");
+        setStateQR("DUPLICATE");
         setScannedState("scanned");
         setMatchFound((prevCount) => prevCount + 1);
+        const currentTime = new Date().toISOString();
+          setStatedup(prev => [
+            ...prev,
+            { duplicateQRID: match["QR ID"], scannedAt: currentTime }
+          ]);
+
         return; // Exit the function to prevent re-updating
       }
   
       // If a match is found and it's not scanned, update matchFound state
       setMatchFound(true);
-      setStateQR("APROBADO");
+      setStateQR("APPROVED");
       // Update "Estado" field to "scanned"
       setFileData((prevData) =>
         prevData.map((row) =>
@@ -56,9 +68,20 @@ export default function App() {
     } else {
       // If no match is found, update matchFound state and show a failure message
       setMatchFound(false);
-      setStateQR("DENEGADO");
+      setQrID(null);
+      setStateQR("DENIED");
     }
   };
+
+  useFocusEffect(
+    useCallback(() => {
+      setIsActive(true); // Activar cámara cuando este tab está enfocado
+  
+      return () => {
+        setIsActive(false); // Desactivarla al salir del tab
+      };
+    }, [])
+  );
 
   useEffect(() => {
     console.log('Loaded file data:', fileData); // Ensure fileData is available
@@ -66,6 +89,7 @@ export default function App() {
 
   const qrLock = useRef(false);
   const appState = useRef(AppState.currentState);
+
 
   useEffect(() => {
     // Listen to app state changes
@@ -119,25 +143,40 @@ export default function App() {
 
   const getModalBackgroundColor = (stateqr: string | null) => {
     switch (stateqr) {
-      case "APROBADO":
+      case "APPROVED":
         return "rgba(170, 204, 0, 0.8)"; // Green
-      case "DENEGADO":
+      case "DENIED":
         return "rgba(239, 35, 60, 0.8)";// Red
-      case "DUPLICADO":
-        return "rgba(33, 37, 41, 0.8)";// Orange
+      case "DUPLICATE":
+        return "rgb(239, 35, 60)";// Orange
       default:
         return "rgba(62, 72, 64, 0.5)"; // Default gray
     }
   };
+  function getTimeAgoString(isoTime: string) {
+    const now = new Date();
+    const past = new Date(isoTime);
+    const diffMs = now.getTime() - past.getTime();
+    const diffMin = Math.floor(diffMs / 60000);
+    const diffSec = Math.floor((diffMs % 60000) / 1000);
+  
+    if (diffMin > 0) {
+      return `${diffMin} min ago`;
+    } else {
+      return `${diffSec} sec ago`;
+    }
+  }
 
   return (
     <View style={styles.container}>
       
       {Platform.OS === "android" ? <StatusBar hidden /> : null}
-      <CameraView style={styles.camera} facing="back" onBarcodeScanned={handleBarcodeScanned}  />
+      {isActive && (
+      <CameraView style={styles.camera} facing="back" onBarcodeScanned={handleBarcodeScanned} enableTorch={torchOn } />
+      )}
       <Overlay />
       <TouchableOpacity style={styles.flashlightButton} onPress={toggleFlashlight}>
-        <Text style={styles.flashlightText}>{torchOn ? 'Flash OFF' : 'Flash ON'}</Text>
+        <Text style={styles.flashlightText}>{torchOn ? 'Flash ON' : 'Flash OFF'}</Text>
       </TouchableOpacity>
     <Modal animationType="slide" transparent={true} visible={modalVisible}>
       <View style={styles.modalContainer}>
@@ -145,7 +184,11 @@ export default function App() {
           <Text style={styles.modalText}>
             {stateqr}
           </Text>
+          <Text style={styles.modalData}>QR ID: {qrID}</Text>
           <Text style={styles.modalData}>{scannedData}</Text>
+          {stateqr === "DUPLICATE" && lastDuplicate && (
+        <Text style={styles.modalData}>Last scanned: {getTimeAgoString(lastDuplicate.scannedAt)}</Text>
+      )}
           <TouchableOpacity style={styles.modalButton} onPress={handleConfirm}>
             <Text style={styles.modalButtonText}>OK</Text>
           </TouchableOpacity>

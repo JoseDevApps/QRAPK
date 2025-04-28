@@ -1,10 +1,10 @@
 {
   "expo": {
-    "name": "my-app",
+    "name": "QRPass",
     "slug": "my-app",
-    "version": "1.0.0",
+    "version": "2.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/QRPass-icon.png",
     "scheme": "myapp",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
@@ -12,8 +12,9 @@
       "supportsTablet": true
     },
     "android": {
+      "permissions": ["CAMERA"],
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "foregroundImage": "./assets/images/QRPass.png",
         "backgroundColor": "#ffffff"
       },
       "package": "com.lionhard.myapp"
@@ -34,7 +35,12 @@
           "backgroundColor": "#ffffff"
         }
       ],
-      "expo-font"
+      [
+        "expo-font",
+        {
+          "fonts": ["./assets/fonts/ProtestStrike-Regular.ttf"]
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
