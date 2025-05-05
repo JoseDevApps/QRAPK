@@ -35,12 +35,12 @@ export default function App() {
   const compareWithExcelData = (scannedCode: string) => {
     // Find the entry that matches the scanned QR code
     setScannedState(" ");
-    const match = fileData.find((row) => row["Código QR"] === scannedCode);
+    const match = fileData.find((row) => row["QRCode"] === scannedCode);
   
     if (match) {
       setQrID(match["QR ID"])
       console.log(match["QR ID"])
-      if (match.Estado === "scanned") {
+      if (match.Status === "scanned") {
         // If QR code is already scanned, show an alert
         setStateQR("DUPLICATE");
         setScannedState("scanned");
@@ -60,8 +60,9 @@ export default function App() {
       // Update "Estado" field to "scanned"
       setFileData((prevData) =>
         prevData.map((row) =>
-          row["Código QR"] === scannedCode
-            ? { ...row, Estado: "scanned" }
+          row["QRCode"] === scannedCode
+            // ? { ...row, Status: "scanned" }
+            ?{ ...row, Status: "scanned", scannedAt: currentTime }
             : row
         )
       );

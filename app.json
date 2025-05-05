@@ -1,11 +1,11 @@
 {
   "expo": {
     "name": "QRPass",
-    "slug": "my-app",
+    "slug": "QRPass",
     "version": "2.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/QRPass-icon.png",
-    "scheme": "myapp",
+    "icon": "./assets/images/adaptive-icon.png",
+    "scheme": "QRPass",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {

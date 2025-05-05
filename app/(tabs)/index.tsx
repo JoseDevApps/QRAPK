@@ -1,99 +1,83 @@
-import React from 'react';
-import { Modal } from 'react-native';
-import { Image, StyleSheet, Platform, Button, Alert, View, Dimensions,TouchableOpacity, Text} from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
+import React, { useCallback, useState } from 'react';
+import { Modal, Image, StyleSheet, Platform, Button, Alert, View, Dimensions, TouchableOpacity, Text } from 'react-native';
 import * as SplashScreen from 'expo-splash-screen';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
 import XLSX from 'xlsx';
-import { useCallback, useState  } from 'react';
 import { useRouter } from 'expo-router';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
-import { useFileData } from '@/contexts/FileDataContext'; // Import the custom hook
+import { useFileData } from '@/contexts/FileDataContext';
 import { useFonts } from 'expo-font';
-const { height,width } = Dimensions.get('window'); // Obtiene el ancho de la pantalla
+
+const { height, width } = Dimensions.get('window');
 
 export default function HomeScreen() {
   const [fontsLoaded] = useFonts({
     ProtestStrike: require('@/assets/fonts/ProtestStrike-Regular.ttf'),
   });
-  
-  const onLayoutRootView = useCallback(async () => {
-    if (fontsLoaded) {
-      await SplashScreen.hideAsync();
-    }
-  }, [fontsLoaded]);
 
-  const { setFileData } = useFileData(); // <--- Este hook se debe ejecutar siempre
-  
+  useFocusEffect(
+    useCallback(() => {
+      const prepare = async () => {
+        if (fontsLoaded) {
+          await SplashScreen.hideAsync();
+        }
+      };
+      prepare();
+    }, [fontsLoaded])
+  );
+
+  const { setFileData, clearFileData } = useFileData();
   const router = useRouter();
   const [modalVisible, setModalVisible] = useState(false);
   const [messageModal, setMessageModal] = useState<string | null>(null);
   const [modalMessageType, setModalMessageType] = useState<'error' | 'success'>('error');
 
-  if (!fontsLoaded) {
-    return null; // No condicionar hooks arriba de esto
-  }
-  
-  // Function to pick and process the Excel file
+  if (!fontsLoaded) return null;
+
   const pickExcelFile = async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
-        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // Excel MIME type
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       });
 
-      if (result.type === 'cancel') return; // Handle cancellation
+      if (result.type === 'cancel') return;
 
-      const uri = result.assets[0].uri; // Get the correct file URI
-
-      // Read the file content as Base64
+      const uri = result.assets[0].uri;
       const base64 = await FileSystem.readAsStringAsync(uri, {
         encoding: FileSystem.EncodingType.Base64,
       });
 
-      // Convert Base64 to a Uint8Array for XLSX parsing
       const bytes = base64ToUint8Array(base64);
       const workbook = XLSX.read(bytes, { type: 'array' });
-      const sheetName = workbook.SheetNames[0]; // Get the first sheet
+      const sheetName = workbook.SheetNames[0];
       const worksheet = workbook.Sheets[sheetName];
-      const jsonData = XLSX.utils.sheet_to_json(worksheet); // Convert sheet to JSON
+      const jsonData = XLSX.utils.sheet_to_json(worksheet);
 
-      // ✅ Required columns to verify
-      const requiredColumns = ['Código QR', 'Estado'];
-
-      // ✅ Check if all required columns are present in the first row
+      const requiredColumns = ['QRCode', 'Status'];
       const firstRow = jsonData[0] || {};
       const missingColumns = requiredColumns.filter(col => !(col in firstRow));
 
       if (missingColumns.length > 0) {
-
         setModalMessageType('error');
-        setMessageModal(
-          `The following required columns are missing: ${missingColumns.join(', ')}`
-        );
+        setMessageModal(`The following required columns are missing: ${missingColumns.join(', ')}`);
         setModalVisible(true);
         return;
       }
 
-      setFileData(jsonData); // Set the data to state
-      setModalMessageType('success');
-      setMessageModal('Data loaded successfully');
-      setModalVisible(true);
-      Alert.alert('Data loaded successfully')
-      // Navigate to the Explore screen with the fileData
-      router.push({
-        pathname: '/explore',
-
-      });
-
+      setFileData(jsonData);
+      Alert.alert('Data loaded successfully');
+      router.push('/explore');
     } catch (error) {
+      console.error(error);
       setModalMessageType('error');
       setMessageModal('Retry loading Excel in the correct format');
       setModalVisible(true);
     }
   };
 
-  // Function to convert Base64 to Uint8Array
   const base64ToUint8Array = (base64: string): Uint8Array => {
     const binaryString = atob(base64);
     const len = binaryString.length;
@@ -105,51 +89,50 @@ export default function HomeScreen() {
   };
 
   return (
-    <View style={styles.container}> 
-     <View style={styles.title}>
-      <ThemedView style={styles.titleContainer}>
-        <Image
-            source={require('@/assets/images/qr-logo.jpeg')} // make sure the image exists at this path
-            style={styles.logo}
-          />
-        <ThemedText style={styles.titleContainer1} type="title">QR</ThemedText>
-        <ThemedText style={styles.titleContainer2} type="title"> Pass</ThemedText>
+    <View style={styles.container} >
+      {/* Title */}
+      <View style={styles.title}>
+        <ThemedView style={styles.titleContainer}>
+          <Image source={require('@/assets/images/qr-logo.jpeg')} style={styles.logo} />
+          <ThemedText style={styles.titleContainer1} type="title">QR</ThemedText>
+          <ThemedText style={styles.titleContainer2} type="title"> Pass</ThemedText>
         </ThemedView>
-     </View>
-
-      <View style={styles.body}>
-      {/* Load Excel File Button */}
-      <ThemedView style={styles.stepContainer1}>
-        <TouchableOpacity style={styles.customButton} onPress={pickExcelFile}>
-          <Text style={styles.buttonText}>Load Excel File</Text>
-        </TouchableOpacity>
-      </ThemedView>
-
-      <ThemedView style={styles.stepContainer2}>
-        <TouchableOpacity style={styles.customButton} onPress={()=> setModalVisible(true)}>
-          <Text style={styles.buttonTextM}>Need Help?</Text>
-        </TouchableOpacity>
-      </ThemedView>
       </View>
 
-      {/* <Modal
-        animationType="slide"
-        transparent={true}
-        visible={modalVisible}
-        onRequestClose={() => setModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContainer}>
-            <Text style={styles.modalText}>Please upload an .xlsx or .xls file with "Id" in header cell A1 and "Code" in header cell B1. Empty cells are not allowed within the data            </Text>
-            <TouchableOpacity
-              style={styles.modalCloseButton}
-              onPress={() => setModalVisible(false)}
-            >
-              <Text style={styles.buttonText}>Close</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal> */}
+      {/* Buttons */}
+      <View style={styles.body}>
+        <ThemedView style={styles.stepContainer1}>
+          <TouchableOpacity style={styles.customButton} onPress={pickExcelFile}>
+            <Text style={styles.buttonText}>Load Excel File</Text>
+          </TouchableOpacity>
+        </ThemedView>
+
+        <ThemedView style={styles.stepContainer2}>
+          <TouchableOpacity style={styles.customButton} onPress={() => setModalVisible(true)}>
+            <Text style={styles.buttonTextM}>Need Help?</Text>
+          </TouchableOpacity>
+         
+        </ThemedView>
+        <ThemedView style={styles.stepContainer2}>
+        <TouchableOpacity
+          style={styles.customButton}
+          onPress={() => {
+            Alert.alert(
+              'Confirm',
+              'Are you sure you want to clear all loaded data?',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Yes, Clear', style: 'destructive', onPress: clearFileData },
+              ]
+            );
+          }}
+        >
+          <Text style={styles.buttonText}>Clear Data</Text>
+        </TouchableOpacity>
+        </ThemedView>
+      </View>
+
+      {/* Modal */}
       <Modal
         animationType="slide"
         transparent={true}
@@ -162,8 +145,7 @@ export default function HomeScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContainer}>
             <Text style={styles.modalText}>
-              {messageModal ??
-                'Please upload an .xlsx or .xls file with "Id" in header cell A1 and "Code" in header cell B1. Empty cells are not allowed within the data'}
+              {messageModal ?? 'Please upload an .xlsx file with "QRCode" and "Status" columns.'}
             </Text>
             <TouchableOpacity
               style={styles.modalCloseButton}
@@ -177,10 +159,7 @@ export default function HomeScreen() {
           </View>
         </View>
       </Modal>
-
-
     </View>
-
   );
 }
 

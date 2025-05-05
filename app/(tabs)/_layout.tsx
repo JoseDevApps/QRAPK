@@ -6,13 +6,11 @@ import { IconSymbol } from '@/components/ui/IconSymbol';
 import TabBarBackground from '@/components/ui/TabBarBackground';
 import { Colors } from '@/constants/Colors';
 import { useColorScheme } from '@/hooks/useColorScheme';
-import { FileDataProvider } from '@/contexts/FileDataContext'; // Import the provider
 export default function TabLayout() {
 
   const colorScheme = useColorScheme();
 
   return (
-    <FileDataProvider>
     <Tabs
       screenOptions={{
         tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
@@ -20,18 +18,12 @@ export default function TabLayout() {
         tabBarButton: HapticTab,
         tabBarBackground: TabBarBackground,
         tabBarStyle: Platform.select({
-          ios: {
-            // Use a transparent background on iOS to show the blur effect
-            position: 'absolute',
-          },
-          android: {
-            // Use a transparent background on iOS to show the blur effect
-            backgroundColor: '#000000', 
-          },
-          
+          ios: { position: 'absolute' },
+          android: { backgroundColor: '#000000' },
           default: {},
         }),
-      }}>
+      }}
+    >
       <Tabs.Screen
         name="index"
         options={{
@@ -56,6 +48,5 @@ export default function TabLayout() {
         }}
       />
     </Tabs>
-    </FileDataProvider>
   );
 }
